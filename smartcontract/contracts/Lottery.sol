@@ -31,7 +31,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 
 
     // Constructor inherits VRFConsumerBase
-    constructor(address vrfCoordinator, address linkToken, bytes32 vrfKeyHash, uint256 vrfFee , address _nftcontractAddress) VRFConsumerBase(vrfCoordinator, linkToken) ERC721("Lottery", "LOT") {   
+    constructor(address vrfCoordinator, address linkToken, bytes32 vrfKeyHash, uint256 vrfFee , address _nftcontractAddress) VRFConsumerBase(vrfCoordinator, linkToken) ERC721("AIFT Lottery Tikcet ", "LOT") {   
         keyHash = vrfKeyHash;
         fee = vrfFee;
         nftContract = IERC721(_nftcontractAddress);
@@ -40,7 +40,9 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 
     // =========         Events      ====================
     event LotterCreated(uint256 lotteryId , uint256 nftId , address lotteryCreator , uint256 timeAtWhichCreatedm , uint256 deadline , uint256 eachTikcetPrice);
-   event TicketPurchased(address indexed buyer, uint256 lotteryId);
+    event TicketPurchased(address indexed buyer, uint256 lotteryId);
+    event WinnerSelected(uint256 lotteryId, address winner);
+
 
 
 
@@ -61,11 +63,13 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         address winner;
         bool isLotteryActive;
         address creator;
+        bool nftTransferred ;
     }
 
     struct LotteryTicket{
         uint256 lotteryId;
         uint256 ticketId;
+        string uri;
         address owner;
     }
 
@@ -82,6 +86,9 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     // Lottery Ticket Id
     mapping(uint256 => LotteryTicket) public lotteryTickets;
     mapping(uint256 => address ) public lotteryTicketIdToOwner;
+
+    mapping(bytes32 => uint256) public requestIdToLotteryId;
+
 
 
 
@@ -109,7 +116,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         _lotteryId.increment();
         uint256 lotteryId = _lotteryId.current();
         Lottery memory newLottery = Lottery(lotteryId , nftId  , block.timestamp ,
-         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user);
+         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user , false);
         
         lotteries[lotteryId] = newLottery;
         addressToLotteryIds[user].push(lotteryId);
@@ -149,7 +156,8 @@ function buyLotteryTicketMetaTx(
     uint256 nonce,
     bytes memory signature,
     address buyer,
-    uint256 amount 
+    uint256 amount ,
+    string memory uri
 ) public payable  nonReentrant {
 
     require(amount == lotteries[_LotteryId].eachTikcetPrice, "Provided ticket price does not match the required ticket price.");
@@ -165,38 +173,37 @@ function buyLotteryTicketMetaTx(
 
     // Transfer the ticket price from relayer to the contract
    // Transfer tokens from user to the contract
-    require(token.transferFrom(buyer, address(this), amount), "Token transfer failed");
+    bool sent = token.transferFrom(buyer, address(this), amount);
+    require(sent, "Token transfer failed");
 
-    _buyLotteryTicket( _LotteryId , buyer );
+    _buyLotteryTicket( _LotteryId , buyer , uri);
 }
 
 
-function _buyLotteryTicket(uint256 _LotteryId , address buyer  ) public payable nonReentrant {
+function _buyLotteryTicket(uint256 _LotteryId , address buyer  , string memory uri ) public payable nonReentrant {
     Lottery storage selectedLottery = lotteries[_LotteryId];
 
     // Ensure the lottery is still active and the deadline hasn't passed.
     require(selectedLottery.isLotteryActive, "This lottery is no longer active.");
     require(block.timestamp < selectedLottery.deadline, "This lottery has ended.");
     require(msg.value == selectedLottery.eachTikcetPrice, "Sent ether should match the ticket price.");
-
-
-    // transfer the money 
-
+    
 
     // Increment the current ticket ID to get a new unique ticket ID.
     uint256 newTicketId = _lotteryId.current();
     _lotteryId.increment();
 
-
-
     // initialize lottery ticket 
-    LotteryTicket memory ticket = LotteryTicket(_LotteryId , newTicketId , buyer);
+    LotteryTicket memory ticket = LotteryTicket(_LotteryId , newTicketId ,uri , buyer);
     lotteryTickets[newTicketId] = ticket;
     lotteryTicketIdToOwner[newTicketId] = buyer;
 
     // Transfer the NFT representing the lottery ticket to the buyer's wallet.
     // Since the ticket is an NFT, we'll use the _mint function of ERC721.
     _mint(buyer, newTicketId);
+
+    // set token uri 
+    _setTokenURI(newTicketId , uri);
 
     // URI can be set if you have a base URI for all lottery tickets. This can be done using setTokenURI function of ERC721URIStorage.
 
@@ -211,6 +218,52 @@ function _buyLotteryTicket(uint256 _LotteryId , address buyer  ) public payable 
 }
 
 
+// function to get the winner - meta transaction 
+function getRandomWinnerMetaTx(uint256 lotteryId, uint256 nonce, bytes memory signature) public {
+    // Recover signer from signature
+    bytes32 messageHash = getHashForWinner(msg.sender, lotteryId, nonce);
+    bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
+    address signer = ethSignedMessageHash.recover(signature);
+    
+    // Ensure the signer hasn't executed this transaction before
+    require(!executed[ethSignedMessageHash], "Transaction already executed");
+    executed[ethSignedMessageHash] = true;
+
+    // Call the internal function
+    _getRandomWinner(lotteryId);
+}
+
+
+    // getting the randow winner 
+function _getRandomWinner(uint256 lotteryId) internal returns (bytes32 requestId) {
+    require(lotteries[lotteryId].isLotteryActive, "This lottery is no longer active.");
+    require(block.timestamp > lotteries[lotteryId].deadline, "This lottery has not ended yet.");
+    require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK");
+    requestId = requestRandomness(keyHash, fee);
+    requestIdToLotteryId[requestId] = lotteryId;
+
+    return requestId;
+}
+
+
+function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual override {
+    uint256 lotteryId = requestIdToLotteryId[requestId];
+    Lottery storage lottery = lotteries[lotteryId];
+    require(lottery.isLotteryActive, "This lottery is no longer active.");
+
+    uint256 index = randomness % lottery.participants.length;
+    address winner = lottery.participants[index];
+    lottery.winner = winner;
+
+    // Transfer NFT to the winner
+    if(!lottery.nftTransferred) {
+        nftContract.safeTransferFrom(address(this), winner, lottery.nftId);
+        lottery.nftTransferred = true;
+        lottery.isLotteryActive = false;
+    }
+
+    emit WinnerSelected(lotteryId, winner);
+}
 
 
 
@@ -226,26 +279,17 @@ function getHash(address sender, address recipient, uint256  nftId, uint256 nonc
 }
 
 
+function getHashForWinner(address sender, uint256 lotteryId, uint256 nonce) public pure returns (bytes32) {
+    return keccak256(abi.encodePacked(sender, lotteryId, nonce));
+}
 
 
 
-    function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual override  {
-        // here we are gonna to have the logic 
-    }
+     // Function to receive Ether. msg.data must be empty
+    receive() external payable {}
 
-      /**
-    * getRandomWinner is called to start the process of selecting a random winner
-    */
-    function getRandomWinner() private returns (bytes32 requestId) {
-        // LINK is an internal interface for Link token found within the VRFConsumerBase
-        // Here we use the balanceOF method from that interface to make sure that our
-        // contract has enough link so that we can request the VRFCoordinator for randomness
-        require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK");
-        // Make a request to the VRF coordinator.
-        // requestRandomness is a function within the VRFConsumerBase
-        // it starts the process of randomness generation
-        return requestRandomness(keyHash, fee);
-    }
+    // Fallback function is called when msg.data is not empty
+    fallback() external payable {}
 
    
 }
