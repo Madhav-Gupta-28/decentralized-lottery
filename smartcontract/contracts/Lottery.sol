@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGuard {
 
@@ -17,6 +18,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 
     // AIFT  IERC721 Contract address 
      IERC721 public nftContract;
+     ERC20 public token;
     
     // =======       Chainlink variables       ============== 
     // The amount of LINK to send with the request
@@ -46,6 +48,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 
     using Counters for Counters.Counter;
     Counters.Counter public  _lotteryId;
+    Counters.Counter public  _ticketId;
 
     struct Lottery {
         uint256 lotteryId;
@@ -60,6 +63,12 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         address creator;
     }
 
+    struct LotteryTicket{
+        uint256 lotteryId;
+        uint256 ticketId;
+        address owner;
+    }
+
 
     mapping(uint256 => Lottery) public lotteries;
     mapping(address => uint256[]) public addressToTicketIds;
@@ -69,6 +78,10 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 
     // New mapping
     mapping(bytes32 => bool) executed;
+
+    // Lottery Ticket Id
+    mapping(uint256 => LotteryTicket) public lotteryTickets;
+    mapping(uint256 => address ) public lotteryTicketIdToOwner;
 
 
 
@@ -90,25 +103,25 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         require(deadline <= block.timestamp + maxDeadline , "Deadline should be less than 30 days");
 
         // 1. transfer the nft to the contract
-        nftContract.safeTransferFrom(msg.sender, address(this), nftId);
+        nftContract.safeTransferFrom(user, address(this), nftId);
 
         // 2. create the lottery
         _lotteryId.increment();
         uint256 lotteryId = _lotteryId.current();
         Lottery memory newLottery = Lottery(lotteryId , nftId  , block.timestamp ,
-         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , msg.sender);
+         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user);
         
         lotteries[lotteryId] = newLottery;
-        addressToLotteryIds[msg.sender].push(lotteryId);
+        addressToLotteryIds[user].push(lotteryId);
 
 
         // emit an event
-        emit LotterCreated(lotteryId , nftId , msg.sender , block.timestamp , deadline  , eachTikcetPrice);
+        emit LotterCreated(lotteryId , nftId ,user, block.timestamp , deadline  , eachTikcetPrice);
     }   
 
 
     function initializeLottery(
-    address user,
+        address user,
     uint256 nftId,
     uint256 deadline,
     uint256 eachTikcetPrice,
@@ -132,71 +145,85 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 }
 
 function buyLotteryTicketMetaTx(
-    uint256 _lotteryId,
+    uint256 _LotteryId,
     uint256 nonce,
-    bytes memory signature
-) public nonReentrant {
-    bytes32 messageHash = getHashBuyLotteryTicket(msg.sender, _lotteryId, nonce, lotteries[_lotteryId].eachTikcetPrice, address(this));
+    bytes memory signature,
+    address buyer,
+    uint256 amount 
+) public payable  nonReentrant {
+
+    require(amount == lotteries[_LotteryId].eachTikcetPrice, "Provided ticket price does not match the required ticket price.");
+
+    bytes32 messageHash = getHashBuyLotteryTicket(buyer, _LotteryId, nonce, lotteries[_LotteryId].eachTikcetPrice, address(this));
     bytes32 signedMessageHash = messageHash.toEthSignedMessageHash();
     address signer = signedMessageHash.recover(signature);
 
     // Ensure the signer hasn't executed this transaction before
     require(!executed[signedMessageHash], "Transaction already executed");
+    require(signer == buyer, "Signature does not match user");
     executed[signedMessageHash] = true;
 
-    _buyLotteryTicket(signer, _lotteryId);
+    // Transfer the ticket price from relayer to the contract
+   // Transfer tokens from user to the contract
+    require(token.transferFrom(buyer, address(this), amount), "Token transfer failed");
+
+    _buyLotteryTicket( _LotteryId , buyer );
 }
 
 
+function _buyLotteryTicket(uint256 _LotteryId , address buyer  ) public payable nonReentrant {
+    Lottery storage selectedLottery = lotteries[_LotteryId];
 
-function _buyLotteryTicket(address user, uint256 _lotteryId) internal {
-    Lottery storage selectedLottery = lotteries[_lotteryId];
-
-    
-    
+    // Ensure the lottery is still active and the deadline hasn't passed.
     require(selectedLottery.isLotteryActive, "This lottery is no longer active.");
     require(block.timestamp < selectedLottery.deadline, "This lottery has ended.");
-    emit TicketPurchased(user, _lotteryId);
+    require(msg.value == selectedLottery.eachTikcetPrice, "Sent ether should match the ticket price.");
+
+
+    // transfer the money 
+
+
+    // Increment the current ticket ID to get a new unique ticket ID.
+    uint256 newTicketId = _lotteryId.current();
+    _lotteryId.increment();
+
+
+
+    // initialize lottery ticket 
+    LotteryTicket memory ticket = LotteryTicket(_LotteryId , newTicketId , buyer);
+    lotteryTickets[newTicketId] = ticket;
+    lotteryTicketIdToOwner[newTicketId] = buyer;
+
+    // Transfer the NFT representing the lottery ticket to the buyer's wallet.
+    // Since the ticket is an NFT, we'll use the _mint function of ERC721.
+    _mint(buyer, newTicketId);
+
+    // URI can be set if you have a base URI for all lottery tickets. This can be done using setTokenURI function of ERC721URIStorage.
+
+    // Update the necessary mappings and arrays.
+    selectedLottery.participants.push(buyer);
+    addressToTicketIds[buyer].push(newTicketId);
+    ticketIdToOwner[newTicketId] = buyer;
+    lotteryIdToPlayerToTicketId[_LotteryId][buyer] = newTicketId;
+
+    // Emit a TicketPurchased event.
+    emit TicketPurchased(buyer, _LotteryId);
 }
+
 
 
 
 
 // Adjusted the getHash function to incorporate _lotteryId and nonce
-function getHashBuyLotteryTicket(address sender, uint256 _lotteryId, uint256 nonce , uint256 amount , address recipient) public pure returns (bytes32) {
-    return keccak256(abi.encodePacked(sender, _lotteryId, nonce , amount , recipient));
+function getHashBuyLotteryTicket(address sender, uint256 lotteryId, uint256 nonce , uint256 amount , address recipient) public pure returns (bytes32) {
+    return keccak256(abi.encodePacked(sender, lotteryId, nonce , amount , recipient));
 }
 
 
     // Add the nonce parameter here
-    function getHash(address sender, address recipient, uint256  nftId, uint256 nonce) public pure returns (bytes32) {
+function getHash(address sender, address recipient, uint256  nftId, uint256 nonce) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(sender, nftId, recipient, nonce));
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
 
 
 
