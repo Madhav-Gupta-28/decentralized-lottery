@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGuard {
 
@@ -18,7 +18,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
 
     // AIFT  IERC721 Contract address 
      IERC721 public nftContract;
-     ERC20 public token;
+     IERC20 public token;
     
     // =======       Chainlink variables       ============== 
     // The amount of LINK to send with the request
@@ -27,12 +27,14 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     bytes32 public keyHash;
 
     // variables
-    uint256 maxDeadline = 30 days;
+    uint256 public constant  maxDeadline = 30 days;
+    uint256 public commissionRate = 20; // out of 100
 
 
     // Constructor inherits VRFConsumerBase
-    constructor(address vrfCoordinator, address linkToken, bytes32 vrfKeyHash, uint256 vrfFee , address _nftcontractAddress) VRFConsumerBase(vrfCoordinator, linkToken) ERC721("AIFT Lottery Tikcet ", "LOT") {   
+    constructor(address vrfCoordinator, address linkToken, bytes32 vrfKeyHash, uint256 vrfFee , address _nftcontractAddress , address _tokencontractAddress) VRFConsumerBase(vrfCoordinator, linkToken) ERC721("AIFT Lottery Tikcet ", "LOT") {   
         keyHash = vrfKeyHash;
+        token = IERC20(_tokencontractAddress);
         fee = vrfFee;
         nftContract = IERC721(_nftcontractAddress);
     }
@@ -64,6 +66,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         bool isLotteryActive;
         address creator;
         bool nftTransferred ;
+        uint256 totalRaised;
     }
 
     struct LotteryTicket{
@@ -116,7 +119,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         _lotteryId.increment();
         uint256 lotteryId = _lotteryId.current();
         Lottery memory newLottery = Lottery(lotteryId , nftId  , block.timestamp ,
-         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user , false);
+         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user , false , 0);
         
         lotteries[lotteryId] = newLottery;
         addressToLotteryIds[user].push(lotteryId);
@@ -176,17 +179,17 @@ function buyLotteryTicketMetaTx(
     bool sent = token.transferFrom(buyer, address(this), amount);
     require(sent, "Token transfer failed");
 
-    _buyLotteryTicket( _LotteryId , buyer , uri);
+    _buyLotteryTicket( _LotteryId , buyer , uri , amount );
 }
 
 
-function _buyLotteryTicket(uint256 _LotteryId , address buyer  , string memory uri ) public payable nonReentrant {
+function _buyLotteryTicket(uint256 _LotteryId , address buyer  , string memory uri , uint256 amount  ) public payable nonReentrant {
     Lottery storage selectedLottery = lotteries[_LotteryId];
 
     // Ensure the lottery is still active and the deadline hasn't passed.
     require(selectedLottery.isLotteryActive, "This lottery is no longer active.");
     require(block.timestamp < selectedLottery.deadline, "This lottery has ended.");
-    require(msg.value == selectedLottery.eachTikcetPrice, "Sent ether should match the ticket price.");
+    require(amount >= selectedLottery.eachTikcetPrice, "Sent ether should match the ticket price.");
     
 
     // Increment the current ticket ID to get a new unique ticket ID.
@@ -213,15 +216,18 @@ function _buyLotteryTicket(uint256 _LotteryId , address buyer  , string memory u
     ticketIdToOwner[newTicketId] = buyer;
     lotteryIdToPlayerToTicketId[_LotteryId][buyer] = newTicketId;
 
+    // Update the total amount raised for the lottery.
+    selectedLottery.totalRaised += amount;
+
     // Emit a TicketPurchased event.
     emit TicketPurchased(buyer, _LotteryId);
 }
 
 
 // function to get the winner - meta transaction 
-function getRandomWinnerMetaTx(uint256 lotteryId, uint256 nonce, bytes memory signature) public {
+function getRandomWinnerMetaTx(uint256 lotteryId, uint256 nonce, bytes memory signature , address caller ) public {
     // Recover signer from signature
-    bytes32 messageHash = getHashForWinner(msg.sender, lotteryId, nonce);
+    bytes32 messageHash = getHashForWinner(caller, lotteryId, nonce);
     bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
     address signer = ethSignedMessageHash.recover(signature);
     
@@ -246,10 +252,11 @@ function _getRandomWinner(uint256 lotteryId) internal returns (bytes32 requestId
 }
 
 
-function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual override {
+function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtual nonReentrant override   {
     uint256 lotteryId = requestIdToLotteryId[requestId];
     Lottery storage lottery = lotteries[lotteryId];
     require(lottery.isLotteryActive, "This lottery is no longer active.");
+
 
     uint256 index = randomness % lottery.participants.length;
     address winner = lottery.participants[index];
@@ -262,10 +269,16 @@ function fulfillRandomness(bytes32 requestId, uint256 randomness) internal virtu
         lottery.isLotteryActive = false;
     }
 
+    uint256 commission = (lotteries[lotteryId].totalRaised * 20) / 100; // Calculate the 20% commission
+    uint256 payout = lotteries[lotteryId].totalRaised - commission; // Calculate the amount to pay out to the lottery initiator
+   
+    require(lottery.creator != address(0), "Invalid lottery initiator address");
+
+    // Transfer the amounts
+    require(token.transfer(lottery.creator , payout), "Token transfer failed"); // Transfer the payout to the lottery initiator
+
     emit WinnerSelected(lotteryId, winner);
 }
-
-
 
 // Adjusted the getHash function to incorporate _lotteryId and nonce
 function getHashBuyLotteryTicket(address sender, uint256 lotteryId, uint256 nonce , uint256 amount , address recipient) public pure returns (bytes32) {
@@ -283,13 +296,24 @@ function getHashForWinner(address sender, uint256 lotteryId, uint256 nonce) publ
     return keccak256(abi.encodePacked(sender, lotteryId, nonce));
 }
 
+function setTokenAddress(address _erc20TokenAddress) external onlyOwner {
+    token = IERC20(_erc20TokenAddress);
+}
+
+ function setCommissionRate(uint256 _rate) external onlyOwner {
+        require(_rate < 100, "Rate should be less than 100");
+        commissionRate = _rate;
+    }
+
+function emergencyWithdrawERC20(address _token, uint256 _amount) external onlyOwner {
+    IERC20(_token).transfer(owner(), _amount);
+}
 
 
-     // Function to receive Ether. msg.data must be empty
-    receive() external payable {}
+// Function to receive Ether. msg.data must be empty
+receive() external payable {}
 
-    // Fallback function is called when msg.data is not empty
-    fallback() external payable {}
-
+// Fallback function is called when msg.data is not empty
+fallback() external payable {}
    
 }
