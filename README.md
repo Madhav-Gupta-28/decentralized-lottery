@@ -1,1 +1,1 @@
-Decentralized Lottery Application
+<h2>Decentralized Lottery Application</h2>

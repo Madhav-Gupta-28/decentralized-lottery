@@ -3,3 +3,12 @@
 @tailwind utilities;
 
 
+body{
+  background-color: "#cccfd4";
+
+}
+
+
+*{
+  background-color: "#cccfd4";
+}
