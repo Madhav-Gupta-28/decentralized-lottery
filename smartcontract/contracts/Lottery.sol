@@ -224,24 +224,15 @@ function _buyLotteryTicket(uint256 _LotteryId , address buyer  , string memory u
 }
 
 
-// function to get the winner - meta transaction 
-function getRandomWinnerMetaTx(uint256 lotteryId, uint256 nonce, bytes memory signature , address caller ) public {
-    // Recover signer from signature
-    bytes32 messageHash = getHashForWinner(caller, lotteryId, nonce);
-    bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
-    address signer = ethSignedMessageHash.recover(signature);
-    
-    // Ensure the signer hasn't executed this transaction before
-    require(!executed[ethSignedMessageHash], "Transaction already executed");
-    executed[ethSignedMessageHash] = true;
-
-    // Call the internal function
-    _getRandomWinner(lotteryId);
-}
+// // function to get the winner - meta transaction 
+// function getRandomWinnerMetaTx(uint256 lotteryId, uint256 nonce, bytes memory signature , address caller ) public {
+//     // // Recover signer from signatur
+//     _getRandomWinner(lotteryId);
+// }
 
 
     // getting the randow winner 
-function _getRandomWinner(uint256 lotteryId) internal returns (bytes32 requestId) {
+function _getRandomWinner(uint256 lotteryId) public  returns (bytes32 requestId) {
     require(lotteries[lotteryId].isLotteryActive, "This lottery is no longer active.");
     require(block.timestamp > lotteries[lotteryId].deadline, "This lottery has not ended yet.");
     require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK");
