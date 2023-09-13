@@ -45,7 +45,7 @@ export const CreateLottery = () => {
         
             const tx = await aift.fetchMYNFTs(account)
             const proposalsArray = Object.values(tx); 
-            setnftArray(Object.values(tx));
+            setnftArray(proposalsArray);
             console.log('Reading tx--> ')
             console.log(tx)
             console.log( "NFT ARRAY -> " , nftArray)
@@ -64,10 +64,10 @@ export const CreateLottery = () => {
   return (
    <>
   <ConnectButtonWrapper/>
-{/*   
+  
         <ChakraProvider>
             <div className='h-full' style={{minHeight:'100vh' ,
-    background: "linear-gradient(135deg, #426F4E 0%, #05101A 100%)"   , color:"#ff8700"}} >
+    background: "#fff"   , color:"#333"}} >
         <Center justifyContent={'center'}>
         <VStack as='header' spacing='6' mt='8' wrap={'wrap'} justifyContent={'space-evenly'} p={'2'}>
             <Heading
@@ -94,7 +94,7 @@ export const CreateLottery = () => {
                 </Center>
                  :
               <HStack wrap={'wrap'} justifyContent={'space-evenly'}>
-                {nftArray.length !== 0 ? 
+                {nftArray !== undefined ? 
                 <div className="grid sm:grid-cols-2 w-fit md:grid-cols-3 lg:grid-cols-4 mx-auto pb-10 gap-6">
                 {nftArray.map((items: any  ) => {
                   return (
@@ -121,7 +121,7 @@ export const CreateLottery = () => {
 
         </HStack>
     </div>
-        </ChakraProvider> */}
+        </ChakraProvider>
    
     
    </>
