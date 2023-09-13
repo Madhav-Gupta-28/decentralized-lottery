@@ -154,7 +154,7 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     executed[signedMessageHash] = true;
 
     // Increment the nonce of the user
-    nonces[user] += 1;
+    nonces[user] = nonce;
     
     // startLottery start the lottery using the recovered user's address
     startLottery( nftId, deadline, eachTikcetPrice, nfTName, user );
@@ -183,7 +183,8 @@ function buyLotteryTicketMetaTx(
 
 
     // Increment the nonce of the buyer
-    nonces[buyer] += 1;
+   nonces[buyer] = nonce;
+    
 
     // Transfer the ticket price from relayer to the contract
    // Transfer tokens from user to the contract
