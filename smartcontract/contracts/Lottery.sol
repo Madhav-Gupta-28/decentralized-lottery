@@ -83,6 +83,9 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     mapping(uint256 => address) public ticketIdToOwner;
     mapping(uint256 => mapping(address => uint256)) public lotteryIdToPlayerToTicketId;
 
+    mapping(address => uint256) public nonces;
+
+
     // New mapping
     mapping(bytes32 => bool) executed;
 
@@ -93,6 +96,9 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     mapping(bytes32 => uint256) public requestIdToLotteryId;
 
 
+    function nonceOf(address user) public view returns (uint256) {
+    return nonces[user];
+}
 
 
 
@@ -100,17 +106,15 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     
     /**
      * @param nftId Id of NFt User want to put in lottery
-     * @param deadline deadline till lottery will be active 
+     * @param duration deadline till lottery will be active 
      * @param eachTikcetPrice price of each ticket 
      * @param nfTName name of that particular NFT
      */
-    function startLottery(uint256 nftId  , uint256 deadline , uint256 eachTikcetPrice , string memory nfTName , 
+    function startLottery(uint256 nftId  , uint256 duration  , uint256 eachTikcetPrice , string memory nfTName , 
     address user ) public  nonReentrant  {
         // require checks 
         require(nftContract.ownerOf(nftId) == user  , "You are not the owner of this NFT");
         require(eachTikcetPrice > 0, "Price Should be greater than 0");
-        require(deadline > block.timestamp , "Deadline should be greater than current time");
-        require(deadline <= block.timestamp + maxDeadline , "Deadline should be less than 30 days");
 
         // 1. transfer the nft to the contract
         nftContract.safeTransferFrom(user, address(this), nftId);
@@ -119,14 +123,14 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
         _lotteryId.increment();
         uint256 lotteryId = _lotteryId.current();
         Lottery memory newLottery = Lottery(lotteryId , nftId  , block.timestamp ,
-         deadline , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user , false , 0);
+         block.timestamp + duration , eachTikcetPrice , nfTName , new address[](0) , address(0) , true , user , false , 0);
         
         lotteries[lotteryId] = newLottery;
         addressToLotteryIds[user].push(lotteryId);
 
 
         // emit an event
-        emit LotterCreated(lotteryId , nftId ,user, block.timestamp , deadline  , eachTikcetPrice);
+        emit LotterCreated(lotteryId , nftId ,user, block.timestamp , duration  , eachTikcetPrice);
     }   
 
 
@@ -148,6 +152,9 @@ contract Lottery is VRFConsumerBase , Ownable , ERC721URIStorage , ReentrancyGua
     require(!executed[signedMessageHash], "Transaction already executed");
     
     executed[signedMessageHash] = true;
+
+    // Increment the nonce of the user
+    nonces[user] += 1;
     
     // startLottery start the lottery using the recovered user's address
     startLottery( nftId, deadline, eachTikcetPrice, nfTName, user );
@@ -173,6 +180,10 @@ function buyLotteryTicketMetaTx(
     require(!executed[signedMessageHash], "Transaction already executed");
     require(signer == buyer, "Signature does not match user");
     executed[signedMessageHash] = true;
+
+
+    // Increment the nonce of the buyer
+    nonces[buyer] += 1;
 
     // Transfer the ticket price from relayer to the contract
    // Transfer tokens from user to the contract
