@@ -1,10 +1,6 @@
 "use client";
-
 import React from 'react'
-import { ChakraProvider, Mark } from '@chakra-ui/react';
 import Header from "@/components/Header/Header"
-import LotteryMarketplace from '@/components/LotteryPlace/lotteryMarketplace';
-
 import '@rainbow-me/rainbowkit/styles.css';
 import {
   getDefaultWallets,
@@ -13,15 +9,11 @@ import {
 import { configureChains, createConfig, sepolia, WagmiConfig } from 'wagmi';
 import {
   polygonMumbai,
-  goerli,
 } from 'wagmi/chains';
 import { alchemyProvider } from 'wagmi/providers/alchemy';
 import { publicProvider } from 'wagmi/providers/public';
 
 import "@rainbow-me/rainbowkit/styles.css";
-
-
-
 
 const { chains, publicClient } = configureChains(
   [polygonMumbai],
@@ -41,20 +33,17 @@ const wagmiConfig = createConfig({
   publicClient
 })
 
-export default function Home() {
+export const ConnectButtonWrapper = () => {
   return (
-    <>
-    <WagmiConfig config={wagmiConfig}>
+   <>
+   <WagmiConfig config={wagmiConfig}>
    <RainbowKitProvider chains={chains}>
-   <ChakraProvider>
       <Header/>
-      <LotteryMarketplace/>
-    </ChakraProvider>
    </RainbowKitProvider>
     </WagmiConfig>
-    
-
-    </>
-    
+   </>
   )
 }
+
+
+export default ConnectButtonWrapper;

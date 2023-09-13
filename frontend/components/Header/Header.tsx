@@ -9,7 +9,6 @@ import Image from 'next/image';
 
 
 const Header = () => {
-
   
     return (
         <>
@@ -31,7 +30,9 @@ const Header = () => {
               Lottery
               </MenuButton>
               <MenuList>
-                <MenuItem className='header-link'>Create Lottery</MenuItem>
+                <MenuItem className='header-link'>
+                <Link className='header-link' href={'/createLottery'} >Create Lottery </Link>
+                </MenuItem>
                 <MenuItem><Link className='header-link' href={'/myproposals'} >Lottery Marketplace</Link></MenuItem>
               </MenuList>
             </Menu>
@@ -42,7 +43,7 @@ const Header = () => {
                 Profile
               </MenuButton>
               <MenuList>
-                <MenuItem>  <Link  className='header-link'  href={'/uploadassets'}>My Lottery</Link>  </MenuItem>
+                <MenuItem>  <Link  className='header-link'  href={'/uploadassets'}>Participated Lottery</Link>  </MenuItem>
                 <MenuItem> <Link   className='header-link' href={'/profile'}>Creater Dashboard</Link></MenuItem>
               </MenuList>
             </Menu>
