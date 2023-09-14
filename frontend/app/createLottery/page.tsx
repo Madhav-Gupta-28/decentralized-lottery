@@ -66,20 +66,19 @@ export const CreateLottery = () => {
   <ConnectButtonWrapper/>
   
         <ChakraProvider>
-            <div className='h-full' style={{minHeight:'100vh' ,
-    background: "#fff"   , color:"#333"}} >
+            <div className='h-full' style={{minHeight:'100vh' ,  background: "#fff"   , color:"#333"}} >
         <Center justifyContent={'center'}>
         <VStack as='header' spacing='6' mt='8' wrap={'wrap'} justifyContent={'space-evenly'} p={'2'}>
             <Heading
               as='h1'
               fontWeight='700'
               fontSize='2rem'
-              color={"#fff"}
+              color={"#333"}
               padding={"0.4rem 0.8rem"}
-              margin={'2rem 0 '}
+              margin={'1rem 0 '}
               
             >
-             Profile
+             MY AIFT
             </Heading>
 
             <div className={Style.thinwhiteborder} style={{marginBottom:'2rem'}} >
@@ -90,7 +89,7 @@ export const CreateLottery = () => {
         <HStack wrap={'wrap'} justifyContent={'space-evenly'}>
         {loading ? 
                 <Center h={'30vh'} justifyContent={'center'} >
-                    <Spinner alignSelf={'center'} thickness='5px'speed='0.5s'emptyColor='gray.200'color='rgba(255, 255, 255, 0.90)'size='xl' />
+                    <Spinner alignSelf={'center'} thickness='5px'speed='0.5s'emptyColor='gray.200'color='#333'size='xl' />
                 </Center>
                  :
               <HStack wrap={'wrap'} justifyContent={'space-evenly'}>
@@ -100,7 +99,7 @@ export const CreateLottery = () => {
                   return (
                     <>   
                       {items.tokenURI && (
-                        <div className="col-span-1 w-72 rounded-3xl border-2 pt-2.5 shadow-md hover:shadow-lg hover:shadow-black transition ease-in-out delay-150 shadow-black"  style={{border:"2px solid  rgba(255, 255, 255, 0.90) " }}>
+                        <div style={{border:'4px solid #333'}} className="col-span-1 w-72 rounded-2xl border-2 pt-2  hover:shadow-lg hover:shadow-black transition ease-in-out delay-150 shadow-black"  >
                           <NFTTile tokenURI={items.tokenURI} proposalid={items.id.toString() } listed={items.listed} price={items.price.toString()} />
                         </div>
                       )}
@@ -112,7 +111,7 @@ export const CreateLottery = () => {
               </div>
                 :
                 <Center  h={'50vh'}>
-                <div className='message text-white'>No AIFT... Pretty Strange Create One <Link href='/mintNFT'><ExternalLinkIcon fontSize={"2rem"} /></Link> </div>
+                <div className='message text-black'>No AIFT... Pretty Strange Create One <Link href='/mintNFT'><ExternalLinkIcon fontSize={"2rem"} /></Link> </div>
                 </Center>
                
             }

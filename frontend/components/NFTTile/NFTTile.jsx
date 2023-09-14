@@ -39,14 +39,14 @@ const NFTTile = ({ tokenURI, proposalid , listed , price }) => {
         src={`${image.replace('ipfs://', 'https://nftstorage.link/ipfs/')}`}
         className="w-11/12 mx-auto rounded-2xl"
         w={"100"}
-        h={"70"}
-        style={{ padding:"0.1 rem" }}
-        borderRadius={'10px'}
+        h={"80"}
+        style={{ padding:"0" }}
+        borderRadius={'5px'}
         objectFit={"contain"}
         alt={name}
       />
-      <div style={{ padding:"0.8 rem" ,  fontSize:'1.2rem' , margin:"0.5rem 0 0 1rem" , color:"rgba(255, 255, 255, 0.90)"}} > <span style={{fontSize:'1.6rem' , marginRight:'0.4rem'}} >{`#${proposalid.toString()}`}</span>  {name}</div>
-      <div style={{ padding:"0.8 rem" ,  fontSize:'1.2rem' , margin:"0.5rem 0 1rem  1rem" , color:"rgba(255, 255, 255, 0.90)"}} >{listed ? `${ethers.utils.formatEther(price.toString())}  Matic`  : "Not Listed"} </div>
+      <div style={{ padding:"0.8 rem" ,  fontSize:'1.2rem' , margin:"0.5rem 0 0 1rem" , color:"#333"}} > <span style={{fontSize:'1.6rem' , marginRight:'0.4rem'}} >{`#${proposalid.toString()}`}</span>  {name}</div>
+      <div style={{ padding:"0.8 rem" ,  fontSize:'1.2rem' , margin:"0.5rem 0 1rem  1rem" , color:"#333"}} >{listed ? `${ethers.utils.formatEther(price.toString())}  Matic`  : "Not Listed"} </div>
     </Link>
    ) : 
     <div></div>
